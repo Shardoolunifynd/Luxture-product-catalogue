@@ -137,7 +137,7 @@
             <td class="py-2 px-4 border-b">${product['Serial No']}</td>
             <td class="py-2 px-4 border-b">${product['Product Name']}</td>
             <td class="py-2 px-4 border-b text-center">
-              <img src="${product['Image URL']}" alt="${product['Product Name']}" class="h-16 object-contain mx-auto rounded shadow" loading="lazy" onerror="console.error('Image failed to load:', this.src); this.style.display='none';" />
+              <img src="${product['Image URL']}" alt="${product['Product Name']}" class="h-16 object-contain mx-auto rounded shadow cursor-pointer" loading="lazy" onerror="console.error('Image failed to load:', this.src); this.style.display='none';" onclick='event.stopPropagation(); showModalFromImg(${JSON.stringify(product)})' />
             </td>
             <td class="py-2 px-4 border-b font-semibold text-green-700">₹${product['Price']}</td>
             <td class="py-2 px-4 border-b">${product['Points']}</td>
@@ -271,6 +271,10 @@
       } finally {
         showLoading(false);
       }
+    }
+
+    function showModalFromImg(product) {
+      showModal(product);
     }
 
     fetchProducts();

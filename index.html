@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Catalog</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="manifest.json" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('service-worker.js');
+      });
+    }
+  </script>
+  <style>
+    table {
+      table-layout: auto;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 0.25rem;
+      background-color: #bfdbfe;
+      color: #1e40af;
+      margin-right: 0.25rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <div class="container mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-center">Product Catalog</h1>
+    <div class="flex flex-col md:flex-row md:justify-between items-center mb-4 gap-2">
+      <input id="search-input" type="text" placeholder="Search products..." class="w-full md:w-1/3 px-3 py-2 border rounded shadow focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <select id="sort-select" class="w-full md:w-1/6 px-3 py-2 border rounded shadow focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="">Sort By</option>
+        <option value="price-asc">Price: Low to High</option>
+        <option value="price-desc">Price: High to Low</option>
+        <option value="points-asc">Points: Low to High</option>
+        <option value="points-desc">Points: High to Low</option>
+      </select>
+      <div id="pagination" class="flex gap-2 mt-2 md:mt-0"></div>
+      <button id="toggle-view" class="ml-2 px-3 py-2 border rounded shadow bg-blue-500 text-white hover:bg-blue-600 transition">Toggle View</button>
+      <button id="export-csv" class="ml-2 px-3 py-2 border rounded shadow bg-green-500 text-white hover:bg-green-600 transition">Export CSV</button>
+      <button id="toggle-dark" class="ml-2 px-3 py-2 border rounded shadow bg-gray-800 text-white hover:bg-gray-900 transition">Dark Mode</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white shadow-md rounded-lg overflow-hidden">
+        <thead class="bg-blue-100">
+          <tr>
+            <th class="py-2 px-4 border-b">Serial No</th>
+            <th class="py-2 px-4 border-b">Product Name</th>
+            <th class="py-2 px-4 border-b">Image</th>
+            <th class="py-2 px-4 border-b">Price</th>
+            <th class="py-2 px-4 border-b">Points</th>
+            <th class="py-2 px-4 border-b">Extra</th>
+          </tr>
+        </thead>
+        <tbody id="product-table" role="rowgroup">
+          <!-- Products will be inserted here -->
+        </tbody>
+      </table>
+      <div id="loading-spinner" class="flex justify-center items-center py-8 hidden">
+        <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+      </div>
+    </div>
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+      <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative">
+        <button id="close-modal" class="absolute top-2 right-2 text-gray-500 hover:text-red-500 text-2xl" aria-label="Close modal">&times;</button>
+        <div id="modal-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbz-Y7Sp-YdEuDyd9EB_2x3G9zdXeV1ibcikT-sWomciRnYniY_L6-KSTdhmDK3lwC0/exec";
+    const tableBody = document.getElementById('product-table');
+    const searchInput = document.getElementById('search-input');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const modal = document.getElementById('modal');
+    const modalContent = document.getElementById('modal-content');
+    const closeModalBtn = document.getElementById('close-modal');
+    const paginationDiv = document.getElementById('pagination');
+    const sortSelect = document.getElementById('sort-select');
+    const toggleViewBtn = document.getElementById('toggle-view');
+    const exportCsvBtn = document.getElementById('export-csv');
+    const toggleDarkBtn = document.getElementById('toggle-dark');
+
+    let allProducts = [];
+    let filteredProducts = [];
+    let currentPage = 1;
+    const rowsPerPage = 8;
+    let cardView = false;
+    let darkMode = false;
+
+    function renderTable(products) {
+      tableBody.innerHTML = '';
+      if (cardView) {
+        // Hide table header in card view
+        document.querySelector('thead').style.display = 'none';
+        if (products.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="py-4 px-4 text-center text-gray-500">No products found.</td></tr>';
+          return;
+        }
+        products.forEach((product, idx) => {
+          const row = document.createElement('tr');
+          row.className = 'border-none';
+          row.innerHTML = `<td colspan="6" class="p-0 border-none">
+            <div class="bg-white rounded-lg shadow-md p-4 mb-4 flex flex-col md:flex-row items-center gap-4 hover:bg-blue-50 cursor-pointer transition">
+              <img src="${product['Image URL']}" alt="${product['Product Name']}" class="h-24 w-24 object-contain rounded shadow mb-2 md:mb-0" loading="lazy" />
+              <div class="flex-1">
+                <h2 class="text-lg font-bold mb-1">${product['Product Name']} <span class="badge">${product['Extra'] || ''}</span></h2>
+                <div class="mb-1 text-green-700 font-semibold">₹${product['Price']}</div>
+                <div class="mb-1">Points: <span class="font-semibold">${product['Points']}</span></div>
+                <div class="text-xs text-gray-500">Serial No: ${product['Serial No']}</div>
+              </div>
+            </div>
+          </td>`;
+          row.addEventListener('click', () => showModal(product));
+          tableBody.appendChild(row);
+        });
+      } else {
+        // Show table header in table view
+        document.querySelector('thead').style.display = '';
+        if (products.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="py-4 px-4 text-center text-gray-500">No products found.</td></tr>';
+          return;
+        }
+        products.forEach((product, idx) => {
+          const row = document.createElement('tr');
+          row.className = idx % 2 === 0 ? 'bg-gray-50 hover:bg-blue-50 cursor-pointer transition' : 'hover:bg-blue-50 cursor-pointer transition';
+          row.innerHTML = `
+            <td class="py-2 px-4 border-b">${product['Serial No']}</td>
+            <td class="py-2 px-4 border-b">${product['Product Name']}</td>
+            <td class="py-2 px-4 border-b text-center">
+              <img src="${product['Image URL']}" alt="${product['Product Name']}" class="h-16 object-contain mx-auto rounded shadow" loading="lazy" onerror="console.error('Image failed to load:', this.src); this.style.display='none';" />
+            </td>
+            <td class="py-2 px-4 border-b font-semibold text-green-700">₹${product['Price']}</td>
+            <td class="py-2 px-4 border-b">${product['Points']}</td>
+            <td class="py-2 px-4 border-b">${product['Extra'] || ''}</td>
+          `;
+          row.addEventListener('click', () => showModal(product));
+          tableBody.appendChild(row);
+        });
+      }
+    }
+
+    function renderBadges(extra) {
+      if (!extra) return '';
+      return extra.split(',').map(e => `<span class="badge">${e.trim()}</span>`).join(' ');
+    }
+
+    function shareProduct(product) {
+      const shareText = `Check out this product: ${product['Product Name']} (Price: ₹${product['Price']})`;
+      if (navigator.share) {
+        navigator.share({
+          title: product['Product Name'],
+          text: shareText,
+          url: window.location.href
+        });
+      } else {
+        navigator.clipboard.writeText(`${shareText} ${window.location.href}`);
+        alert('Product link copied to clipboard!');
+      }
+    }
+
+    closeModalBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+
+    // Accessibility: keyboard navigation for modal
+    document.addEventListener('keydown', (e) => {
+      if (!modal.classList.contains('hidden') && (e.key === 'Escape' || e.key === 'Esc')) {
+        modal.classList.add('hidden');
+      }
+    });
+
+    function paginate(products, page, perPage) {
+      const start = (page - 1) * perPage;
+      return products.slice(start, start + perPage);
+    }
+
+    function renderPagination(total, page, perPage) {
+      paginationDiv.innerHTML = '';
+      const pageCount = Math.ceil(total / perPage);
+      if (pageCount <= 1) return;
+      for (let i = 1; i <= pageCount; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = `px-3 py-1 rounded border ${i === page ? 'bg-blue-500 text-white' : 'bg-white text-blue-500 hover:bg-blue-100'} mx-1`;
+        btn.addEventListener('click', () => {
+          currentPage = i;
+          updateTable();
+        });
+        paginationDiv.appendChild(btn);
+      }
+    }
+
+    function updateTable() {
+      const paginated = paginate(filteredProducts, currentPage, rowsPerPage);
+      renderTable(paginated);
+      renderPagination(filteredProducts.length, currentPage, rowsPerPage);
+    }
+
+    searchInput.addEventListener('input', (e) => {
+      const val = e.target.value.toLowerCase();
+      filteredProducts = allProducts.filter(p => p['Product Name']?.toLowerCase().includes(val));
+      currentPage = 1;
+      updateTable();
+    });
+
+    sortSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'price-asc') {
+        filteredProducts.sort((a, b) => a['Price'] - b['Price']);
+      } else if (val === 'price-desc') {
+        filteredProducts.sort((a, b) => b['Price'] - a['Price']);
+      } else if (val === 'points-asc') {
+        filteredProducts.sort((a, b) => a['Points'] - b['Points']);
+      } else if (val === 'points-desc') {
+        filteredProducts.sort((a, b) => b['Points'] - a['Points']);
+      }
+      currentPage = 1;
+      updateTable();
+    });
+
+    toggleViewBtn.addEventListener('click', () => {
+      cardView = !cardView;
+      updateTable();
+    });
+
+    exportCsvBtn.addEventListener('click', () => {
+      let csv = 'Serial No,Product Name,Image URL,Price,Points,Extra\n';
+      allProducts.forEach(p => {
+        csv += `${p['Serial No']},"${p['Product Name']}",${p['Image URL']},${p['Price']},${p['Points']},"${p['Extra'] || ''}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'products.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    toggleDarkBtn.addEventListener('click', () => {
+      darkMode = !darkMode;
+      document.body.classList.toggle('dark', darkMode);
+      document.body.classList.toggle('bg-gray-900', darkMode);
+      document.body.classList.toggle('text-gray-100', darkMode);
+      updateTable();
+    });
+
+    function showLoading(show) {
+      loadingSpinner.classList.toggle('hidden', !show);
+    }
+
+    async function fetchProducts() {
+      showLoading(true);
+      try {
+        const response = await fetch(SHEET_API_URL);
+        const data = await response.json();
+        allProducts = data;
+        filteredProducts = data;
+        updateTable();
+      } catch (error) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="py-4 px-4 text-center text-red-500">Failed to load products.</td></tr>';
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    fetchProducts();
+  </script>
+</body>
+</html>

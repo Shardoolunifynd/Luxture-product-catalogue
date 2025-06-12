@@ -1,0 +1,15 @@
+{
+  "name": "Product Catalogue",
+  "short_name": "Catalogue",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#2563eb",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/assets/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    }
+  ]
+}
